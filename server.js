@@ -71,6 +71,7 @@ let menuItems = [];
 let restaurants = [];
 let customers = [];
 let notifications = [];
+const connectedUsers = new Map();
 
 // Sample data initialization
 const initializeData = () => {
@@ -148,9 +149,6 @@ const initializeData = () => {
     ];
 };
 
-// Initialize data
-initializeData();
-
 // Utility functions
 const validateOrderData = (orderData) => {
     const errors = [];
@@ -206,6 +204,16 @@ initializeData();
 
 // Routes
 
+// Health check
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: NODE_ENV
+    });
+});
+
 // Serve Customer App
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'customer', 'index.html'));
@@ -224,79 +232,134 @@ app.get('/restaurant', (req, res) => {
 
 // Menu APIs
 app.get('/api/menu', (req, res) => {
-    res.json({
-        success: true,
-        data: menuItems
-    });
+    try {
+        res.json({
+            success: true,
+            data: menuItems,
+            count: menuItems.length
+        });
+    } catch (error) {
+        console.error('❌ Error fetching menu:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch menu'
+        });
+    }
 });
 
 app.post('/api/menu', (req, res) => {
-    const newItem = {
-        id: Date.now(),
-        ...req.body,
-        available: true
-    };
-    menuItems.push(newItem);
-    
-    // Notify all connected clients about menu update
-    io.emit('menuUpdated', menuItems);
-    
-    res.json({
-        success: true,
-        data: newItem
-    });
-});
-
-app.put('/api/menu/:id', (req, res) => {
-    const itemId = parseInt(req.params.id);
-    const itemIndex = menuItems.findIndex(item => item.id === itemId);
-    
-    if (itemIndex !== -1) {
-        menuItems[itemIndex] = { ...menuItems[itemIndex], ...req.body };
+    try {
+        const newItem = {
+            id: Date.now(),
+            ...req.body,
+            available: true,
+            createdAt: new Date().toISOString()
+        };
+        menuItems.push(newItem);
         
         // Notify all connected clients about menu update
         io.emit('menuUpdated', menuItems);
         
-        res.json({
+        console.log(`✅ New menu item added: ${newItem.name}`);
+        
+        res.status(201).json({
             success: true,
-            data: menuItems[itemIndex]
+            message: 'Menu item added successfully',
+            data: newItem
         });
-    } else {
-        res.status(404).json({
+    } catch (error) {
+        console.error('❌ Error adding menu item:', error);
+        res.status(500).json({
             success: false,
-            message: 'Menu item not found'
+            message: 'Failed to add menu item'
+        });
+    }
+});
+
+app.put('/api/menu/:id', (req, res) => {
+    try {
+        const itemId = parseInt(req.params.id);
+        const itemIndex = menuItems.findIndex(item => item.id === itemId);
+        
+        if (itemIndex !== -1) {
+            menuItems[itemIndex] = { 
+                ...menuItems[itemIndex], 
+                ...req.body,
+                updatedAt: new Date().toISOString()
+            };
+            
+            // Notify all connected clients about menu update
+            io.emit('menuUpdated', menuItems);
+            
+            console.log(`✅ Menu item updated: ${menuItems[itemIndex].name}`);
+            
+            res.json({
+                success: true,
+                message: 'Menu item updated successfully',
+                data: menuItems[itemIndex]
+            });
+        } else {
+            res.status(404).json({
+                success: false,
+                message: 'Menu item not found'
+            });
+        }
+    } catch (error) {
+        console.error('❌ Error updating menu item:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update menu item'
         });
     }
 });
 
 app.delete('/api/menu/:id', (req, res) => {
-    const itemId = parseInt(req.params.id);
-    const itemIndex = menuItems.findIndex(item => item.id === itemId);
-    
-    if (itemIndex !== -1) {
-        menuItems.splice(itemIndex, 1);
+    try {
+        const itemId = parseInt(req.params.id);
+        const itemIndex = menuItems.findIndex(item => item.id === itemId);
         
-        // Notify all connected clients about menu update
-        io.emit('menuUpdated', menuItems);
-        
-        res.json({
-            success: true,
-            message: 'Menu item deleted'
-        });
-    } else {
-        res.status(404).json({
+        if (itemIndex !== -1) {
+            const deletedItem = menuItems.splice(itemIndex, 1)[0];
+            
+            // Notify all connected clients about menu update
+            io.emit('menuUpdated', menuItems);
+            
+            console.log(`✅ Menu item deleted: ${deletedItem.name}`);
+            
+            res.json({
+                success: true,
+                message: 'Menu item deleted successfully'
+            });
+        } else {
+            res.status(404).json({
+                success: false,
+                message: 'Menu item not found'
+            });
+        }
+    } catch (error) {
+        console.error('❌ Error deleting menu item:', error);
+        res.status(500).json({
             success: false,
-            message: 'Menu item not found'
+            message: 'Failed to delete menu item'
         });
     }
 });
 
 // Order APIs
 app.get('/api/orders', (req, res) => {
-    res.json({
-        success: true,
-        data: orders
-    });
+    try {
+        res.json({
+            success: true,
+            data: orders,
+            count: orders.length
+        });
+    } catch (error) {
+        console.error('❌ Error fetching orders:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch orders'
+        });
+    }
 });
 
 app.post('/api/orders', (req, res) => {
@@ -342,10 +405,10 @@ app.post('/api/orders', (req, res) => {
         orders.unshift(newOrder);
         
         // Notify restaurant about new order
-        io.emit('newOrder', newOrder);
+        io.to('restaurant_room').emit('newOrder', newOrder);
         
         // Send confirmation to customer
-        io.emit('orderConfirmed', {
+        io.to('customer_room').emit('orderConfirmed', {
             orderId: newOrder.id,
             estimatedTime: newOrder.estimatedTime,
             orderNumber: newOrder.orderNumber
@@ -364,69 +427,99 @@ app.post('/api/orders', (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to create order',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+            error: NODE_ENV === 'development' ? error.message : 'Internal server error'
         });
     }
 });
 
 app.put('/api/orders/:id/status', (req, res) => {
-    const orderId = req.params.id;
-    const { status } = req.body;
-    
-    const orderIndex = orders.findIndex(order => order.id === orderId);
-    
-    if (orderIndex !== -1) {
-        orders[orderIndex].status = status;
-        orders[orderIndex].updatedAt = new Date().toISOString();
+    try {
+        const orderId = req.params.id;
+        const { status } = req.body;
         
-        // Notify customer about status update
-        io.emit('orderStatusUpdate', {
-            orderId: orderId,
-            status: status,
-            order: orders[orderIndex]
-        });
+        // Validate status
+        const validStatuses = ['pending', 'preparing', 'ready', 'delivered', 'cancelled'];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid status'
+            });
+        }
         
-        res.json({
-            success: true,
-            data: orders[orderIndex]
-        });
-    } else {
-        res.status(404).json({
+        const orderIndex = orders.findIndex(order => order.id === orderId);
+        
+        if (orderIndex !== -1) {
+            orders[orderIndex].status = status;
+            orders[orderIndex].updatedAt = new Date().toISOString();
+            
+            // Notify customer about status update
+            io.to('customer_room').emit('orderStatusUpdate', {
+                orderId: orderId,
+                status: status,
+                order: orders[orderIndex]
+            });
+            
+            console.log(`✅ Order ${orderId} status updated to: ${status}`);
+            
+            res.json({
+                success: true,
+                message: 'Order status updated successfully',
+                data: orders[orderIndex]
+            });
+        } else {
+            res.status(404).json({
+                success: false,
+                message: 'Order not found'
+            });
+        }
+    } catch (error) {
+        console.error('❌ Error updating order status:', error);
+        res.status(500).json({
             success: false,
-            message: 'Order not found'
+            message: 'Failed to update order status'
         });
     }
 });
 
 // Restaurant APIs
 app.get('/api/restaurant/stats', (req, res) => {
-    const today = new Date().toDateString();
-    const todayOrders = orders.filter(order => 
-        new Date(order.createdAt).toDateString() === today
-    );
-    
-    const stats = {
-        totalOrders: orders.length,
-        todayOrders: todayOrders.length,
-        pendingOrders: orders.filter(order => order.status === 'pending').length,
-        completedOrders: orders.filter(order => order.status === 'delivered').length,
-        totalRevenue: orders.reduce((sum, order) => sum + (order.total || 0), 0),
-        todayRevenue: todayOrders.reduce((sum, order) => sum + (order.total || 0), 0)
-    };
-    
-    res.json({
-        success: true,
-        data: stats
-    });
+    try {
+        const today = new Date().toDateString();
+        const todayOrders = orders.filter(order => 
+            new Date(order.createdAt).toDateString() === today
+        );
+        
+        const stats = {
+            totalOrders: orders.length,
+            todayOrders: todayOrders.length,
+            pendingOrders: orders.filter(order => order.status === 'pending').length,
+            completedOrders: orders.filter(order => order.status === 'delivered').length,
+            totalRevenue: orders.reduce((sum, order) => sum + (order.total || 0), 0),
+            todayRevenue: todayOrders.reduce((sum, order) => sum + (order.total || 0), 0),
+            connectedUsers: {
+                customers: Array.from(connectedUsers.values()).filter(u => u.userType === 'customer').length,
+                restaurants: Array.from(connectedUsers.values()).filter(u => u.userType === 'restaurant').length,
+                total: connectedUsers.size
+            }
+        };
+        
+        res.json({
+            success: true,
+            data: stats
+        });
+    } catch (error) {
+        console.error('❌ Error fetching restaurant stats:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch restaurant stats'
+        });
+    }
 });
 
-// Utility functions
-function calculateEstimatedTime(items) {
-    if (!items || items.length === 0) return 30;
+// Enhanced Socket.IO connection handling
+io.on('connection', (socket) => {
+    console.log(`🔌 User connected: ${socket.id}`);
     
-    const maxPrepTime = Math.max(...items.map(item => {
-        const menuItem = menuItems.find(mi => mi.id === item.id);
-        return menuItem ? menuItem.preparationTime : 15;
     // Join room based on user type
     socket.on('joinRoom', (data) => {
         try {
@@ -436,11 +529,11 @@ function calculateEstimatedTime(items) {
             socket.join(roomName);
             connectedUsers.set(socket.id, { userType, userId, roomName });
             
-            console.log(`User ${userId} joined ${userType} room`);
+            console.log(`👤 ${userType} joined room: ${roomName} (${socket.id})`);
             
             // Send welcome message
             socket.emit('connected', {
-                message: `Welcome to ZaikaJunction ${userType} app!`,
+                message: `Welcome to Zaika Junction ${userType} app!`,
                 socketId: socket.id,
                 timestamp: new Date().toISOString()
             });
@@ -455,7 +548,7 @@ function calculateEstimatedTime(items) {
             io.emit('connectionStats', stats);
             
         } catch (error) {
-            console.error('Error joining room:', error);
+            console.error('❌ Error joining room:', error);
             socket.emit('error', { message: 'Failed to join room' });
         }
     });
@@ -475,54 +568,99 @@ function calculateEstimatedTime(items) {
                 socket.emit('orderNotFound', { orderId });
             }
         } catch (error) {
-            console.error('Error tracking order:', error);
+            console.error('❌ Error tracking order:', error);
             socket.emit('error', { message: 'Failed to track order' });
-        const order = orders.find(o => o.id === orderId);
-        if (order) {
-            socket.emit('orderUpdate', order);
-        }
-    });
-    
-    // Handle restaurant actions
-    socket.on('updateOrderStatus', (data) => {
-        const { orderId, status } = data;
-        const orderIndex = orders.findIndex(order => order.id === orderId);
-        
-        if (orderIndex !== -1) {
-            orders[orderIndex].status = status;
-            orders[orderIndex].updatedAt = new Date().toISOString();
-            
-            // Notify all clients about the update
-            io.emit('orderStatusUpdate', {
-                orderId: orderId,
-                status: status,
-                order: orders[orderIndex]
-            });
         }
     });
     
     // Handle menu item availability toggle
     socket.on('toggleItemAvailability', (data) => {
-        const { itemId, available } = data;
-        const itemIndex = menuItems.findIndex(item => item.id === itemId);
-        
-        if (itemIndex !== -1) {
-            menuItems[itemIndex].available = available;
-            io.emit('menuUpdated', menuItems);
+        try {
+            const { itemId, available } = data;
+            const itemIndex = menuItems.findIndex(item => item.id === itemId);
+            
+            if (itemIndex !== -1) {
+                menuItems[itemIndex].available = available;
+                
+                // Notify all clients about menu update
+                io.emit('menuUpdated', menuItems);
+                
+                console.log(`🍽️ Menu item ${itemId} availability: ${available}`);
+            }
+        } catch (error) {
+            console.error('❌ Error toggling item availability:', error);
+            socket.emit('error', { message: 'Failed to update menu item' });
         }
     });
     
-    socket.on('disconnect', () => {
-        console.log('Client disconnected:', socket.id);
+    // Handle test events
+    socket.on('test', (data) => {
+        console.log('🧪 Test event received:', data);
+        socket.emit('testResponse', { 
+            message: 'Test successful', 
+            timestamp: new Date().toISOString(),
+            originalData: data 
+        });
+    });
+    
+    // Handle disconnection
+    socket.on('disconnect', (reason) => {
+        const user = connectedUsers.get(socket.id);
+        if (user) {
+            console.log(`🔌 ${user.userType} disconnected: ${socket.id} (${reason})`);
+            connectedUsers.delete(socket.id);
+            
+            // Update connection stats
+            const stats = {
+                customers: Array.from(connectedUsers.values()).filter(u => u.userType === 'customer').length,
+                restaurants: Array.from(connectedUsers.values()).filter(u => u.userType === 'restaurant').length,
+                total: connectedUsers.size
+            };
+            
+            io.emit('connectionStats', stats);
+        } else {
+            console.log(`🔌 Unknown user disconnected: ${socket.id} (${reason})`);
+        }
+    });
+    
+    // Handle connection errors
+    socket.on('error', (error) => {
+        console.error('❌ Socket error:', error);
     });
 });
 
-// Error handling middleware
+// Global error handler
 app.use((err, req, res, next) => {
-    console.error(err.stack);
+    console.error('❌ Global error:', err.stack);
     res.status(500).json({
         success: false,
-        message: 'Something went wrong!'
+        message: NODE_ENV === 'development' ? err.message : 'Something went wrong!',
+        error: NODE_ENV === 'development' ? err.stack : undefined
+    });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+    res.status(404).json({
+        success: false,
+        message: 'Route not found'
+    });
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('🛑 SIGTERM received, shutting down gracefully...');
+    server.close(() => {
+        console.log('✅ Server closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('🛑 SIGINT received, shutting down gracefully...');
+    server.close(() => {
+        console.log('✅ Server closed');
+        process.exit(0);
     });
 });
 
@@ -533,6 +671,8 @@ server.listen(PORT, () => {
     console.log(`🏪 Restaurant App: http://localhost:${PORT}/restaurant`);
     console.log(`📊 API Endpoints: http://localhost:${PORT}/api/`);
     console.log(`🔗 Socket.IO: http://localhost:${PORT}/socket.io/`);
+    console.log(`🏥 Health Check: http://localhost:${PORT}/health`);
+    console.log(`🌍 Environment: ${NODE_ENV}`);
     console.log(`\n✅ Server ready for connections!`);
 });
 
