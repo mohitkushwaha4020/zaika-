@@ -6,20 +6,64 @@ const cors = require('cors');
 
 const app = express();
 const server = http.createServer(app);
+
+// Enhanced Socket.IO configuration
 const io = socketIo(server, {
     cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
+        origin: process.env.NODE_ENV === 'production' 
+            ? ["https://zaika-mhby.onrender.com"] 
+            : "*",
+        methods: ["GET", "POST", "PUT", "DELETE"],
+        credentials: true
+    },
+    transports: ['websocket', 'polling'],
+    pingTimeout: 60000,
+    pingInterval: 25000
 });
 
 const PORT = process.env.PORT || 3000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.static('customer'));
-app.use('/restaurant', express.static('restaurant'));
+// Security and Performance Middleware
+app.use(cors({
+    origin: process.env.NODE_ENV === 'production' 
+        ? ["https://zaika-mhby.onrender.com"] 
+        : "*",
+    credentials: true
+}));
+
+// Body parsing with limits
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Security headers
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    if (NODE_ENV === 'production') {
+        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    next();
+});
+
+// Static file serving with caching
+app.use(express.static('customer', {
+    maxAge: NODE_ENV === 'production' ? '1d' : '0',
+    etag: true
+}));
+app.use('/restaurant', express.static('restaurant', {
+    maxAge: NODE_ENV === 'production' ? '1d' : '0',
+    etag: true
+}));
+
+// Request logging
+app.use((req, res, next) => {
+    const timestamp = new Date().toISOString();
+    console.log(`${timestamp} - ${req.method} ${req.path} - ${req.ip}`);
+    next();
+});
 
 // In-memory data storage (in production, use a database)
 let orders = [];
@@ -102,6 +146,59 @@ const initializeData = () => {
             closeTime: '22:00'
         }
     ];
+};
+
+// Initialize data
+initializeData();
+
+// Utility functions
+const validateOrderData = (orderData) => {
+    const errors = [];
+    
+    if (!orderData.items || !Array.isArray(orderData.items) || orderData.items.length === 0) {
+        errors.push('Items are required and must be a non-empty array');
+    }
+    
+    if (typeof orderData.total !== 'number' || orderData.total <= 0) {
+        errors.push('Total must be a positive number');
+    }
+    
+    if (!orderData.customerInfo || !orderData.customerInfo.name) {
+        errors.push('Customer name is required');
+    }
+    
+    orderData.items?.forEach((item, index) => {
+        if (!item.name || typeof item.name !== 'string') {
+            errors.push(`Item ${index + 1}: name is required`);
+        }
+        if (typeof item.price !== 'number' || item.price <= 0) {
+            errors.push(`Item ${index + 1}: price must be a positive number`);
+        }
+        if (typeof item.quantity !== 'number' || item.quantity <= 0) {
+            errors.push(`Item ${index + 1}: quantity must be a positive number`);
+        }
+    });
+    
+    return errors;
+};
+
+const sanitizeString = (str) => {
+    if (typeof str !== 'string') return str;
+    return str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+              .replace(/[<>]/g, '')
+              .trim();
+};
+
+const calculateEstimatedTime = (items) => {
+    if (!items || !Array.isArray(items)) return 30;
+    
+    const baseTime = 15; // Base preparation time
+    const itemTime = items.reduce((total, item) => {
+        const menuItem = menuItems.find(mi => mi.id === item.id);
+        return total + ((menuItem?.preparationTime || 10) * item.quantity);
+    }, 0);
+    
+    return Math.min(Math.max(baseTime + Math.ceil(itemTime / 2), 15), 60);
 };
 
 // Initialize data
@@ -203,29 +300,73 @@ app.get('/api/orders', (req, res) => {
 });
 
 app.post('/api/orders', (req, res) => {
-    const newOrder = {
-        id: `ORD${Date.now()}`,
-        ...req.body,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        estimatedTime: calculateEstimatedTime(req.body.items)
-    };
-    
-    orders.unshift(newOrder);
-    
-    // Notify restaurant about new order
-    io.emit('newOrder', newOrder);
-    
-    // Send confirmation to customer
-    io.emit('orderConfirmed', {
-        orderId: newOrder.id,
-        estimatedTime: newOrder.estimatedTime
-    });
-    
-    res.json({
-        success: true,
-        data: newOrder
-    });
+    try {
+        // Validate order data
+        const validationErrors = validateOrderData(req.body);
+        if (validationErrors.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: validationErrors
+            });
+        }
+        
+        // Sanitize customer info
+        const sanitizedCustomerInfo = {
+            ...req.body.customerInfo,
+            name: sanitizeString(req.body.customerInfo.name),
+            phone: sanitizeString(req.body.customerInfo.phone),
+            address: req.body.customerInfo.address ? {
+                ...req.body.customerInfo.address,
+                fullAddress: sanitizeString(req.body.customerInfo.address.fullAddress)
+            } : null
+        };
+        
+        // Create new order with enhanced data
+        const newOrder = {
+            id: `ORD${Date.now()}`,
+            items: req.body.items.map(item => ({
+                ...item,
+                name: sanitizeString(item.name)
+            })),
+            total: Number(req.body.total),
+            customerInfo: sanitizedCustomerInfo,
+            paymentMethod: sanitizeString(req.body.paymentMethod) || 'COD',
+            deliveryCharge: Number(req.body.deliveryCharge) || 0,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            estimatedTime: calculateEstimatedTime(req.body.items),
+            orderNumber: orders.length + 1
+        };
+        
+        orders.unshift(newOrder);
+        
+        // Notify restaurant about new order
+        io.emit('newOrder', newOrder);
+        
+        // Send confirmation to customer
+        io.emit('orderConfirmed', {
+            orderId: newOrder.id,
+            estimatedTime: newOrder.estimatedTime,
+            orderNumber: newOrder.orderNumber
+        });
+        
+        console.log(`✅ New order created: ${newOrder.id} - ₹${newOrder.total}`);
+        
+        res.status(201).json({
+            success: true,
+            message: 'Order placed successfully',
+            data: newOrder
+        });
+        
+    } catch (error) {
+        console.error('❌ Error creating order:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to create order',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
 });
 
 app.put('/api/orders/:id/status', (req, res) => {
@@ -286,24 +427,56 @@ function calculateEstimatedTime(items) {
     const maxPrepTime = Math.max(...items.map(item => {
         const menuItem = menuItems.find(mi => mi.id === item.id);
         return menuItem ? menuItem.preparationTime : 15;
-    }));
-    
-    return Math.max(maxPrepTime + 10, 20); // Add 10 minutes buffer, minimum 20 minutes
-}
-
-// Socket.IO connection handling
-io.on('connection', (socket) => {
-    console.log('New client connected:', socket.id);
-    
     // Join room based on user type
     socket.on('joinRoom', (data) => {
-        const { userType, userId } = data;
-        socket.join(userType);
-        console.log(`User ${userId} joined ${userType} room`);
+        try {
+            const { userType, userId } = data;
+            const roomName = `${userType}_room`;
+            
+            socket.join(roomName);
+            connectedUsers.set(socket.id, { userType, userId, roomName });
+            
+            console.log(`User ${userId} joined ${userType} room`);
+            
+            // Send welcome message
+            socket.emit('connected', {
+                message: `Welcome to ZaikaJunction ${userType} app!`,
+                socketId: socket.id,
+                timestamp: new Date().toISOString()
+            });
+            
+            // Update connection stats
+            const stats = {
+                customers: Array.from(connectedUsers.values()).filter(u => u.userType === 'customer').length,
+                restaurants: Array.from(connectedUsers.values()).filter(u => u.userType === 'restaurant').length,
+                total: connectedUsers.size
+            };
+            
+            io.emit('connectionStats', stats);
+            
+        } catch (error) {
+            console.error('Error joining room:', error);
+            socket.emit('error', { message: 'Failed to join room' });
+        }
     });
     
     // Handle order tracking
     socket.on('trackOrder', (orderId) => {
+        try {
+            const order = orders.find(o => o.id === orderId);
+            if (order) {
+                socket.emit('orderTrackingUpdate', {
+                    orderId: orderId,
+                    status: order.status,
+                    estimatedTime: order.estimatedTime,
+                    createdAt: order.createdAt
+                });
+            } else {
+                socket.emit('orderNotFound', { orderId });
+            }
+        } catch (error) {
+            console.error('Error tracking order:', error);
+            socket.emit('error', { message: 'Failed to track order' });
         const order = orders.find(o => o.id === orderId);
         if (order) {
             socket.emit('orderUpdate', order);
