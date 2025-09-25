@@ -356,8 +356,11 @@ app.use((err, req, res, next) => {
 // Start server
 server.listen(PORT, () => {
     console.log(`🚀 Zaika Junction Server running on port ${PORT}`);
-    console.log(`📱 Customer App: http://localhost:${PORT}/customer`);
+    console.log(`📱 Customer App: http://localhost:${PORT}/`);
     console.log(`🏪 Restaurant App: http://localhost:${PORT}/restaurant`);
+    console.log(`📊 API Endpoints: http://localhost:${PORT}/api/`);
+    console.log(`🔗 Socket.IO: http://localhost:${PORT}/socket.io/`);
+    console.log(`\n✅ Server ready for connections!`);
 });
 
 module.exports = { app, server, io };
