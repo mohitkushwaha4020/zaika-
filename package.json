@@ -1,16 +1,47 @@
 {
   "name": "zaika-junction-app",
-  "version": "1.0.0",
-  "description": "Zaika Junction - Food Delivery Platform with Customer & Restaurant Apps",
+  "version": "1.1.0",
+  "description": "Zaika Junction - Real-time Food Delivery Platform with Customer & Restaurant Apps featuring Socket.IO integration",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
-    "build": "echo 'No build step required'"
+    "dev": "nodemon server.js --ignore '*.json'",
+    "debug": "node start-debug.js",
+    "test-realtime": "node start-debug.js",
+    "test": "echo 'Use npm run test-realtime for real-time testing'",
+    "build": "echo 'No build step required - Static files served directly'",
+    "lint": "echo 'Linting not configured - Add ESLint for production'",
+    "health": "curl -f http://localhost:8000/health || exit 1",
+    "logs": "echo 'Server logs will appear in console'",
+    "clean": "echo 'No build artifacts to clean'"
   },
-  "keywords": ["food", "delivery", "restaurant", "pwa", "nodejs", "realtime"],
-  "author": "Zaika Junction Team",
+  "keywords": [
+    "food-delivery",
+    "restaurant-management", 
+    "real-time",
+    "socket.io",
+    "pwa",
+    "nodejs",
+    "express",
+    "indian-food",
+    "order-management",
+    "customer-app",
+    "restaurant-dashboard"
+  ],
+  "author": {
+    "name": "Zaika Junction Team",
+    "email": "dev@zaikajunction.com",
+    "url": "https://zaikajunction.com"
+  },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zaika-junction/app.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zaika-junction/app/issues"
+  },
+  "homepage": "https://zaika-junction.onrender.com",
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.7.2",
@@ -19,7 +50,102 @@
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
+  "optionalDependencies": {},
+  "peerDependencies": {},
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "os": ["linux", "darwin", "win32"],
+  "cpu": ["x64", "arm64"],
+  "config": {
+    "port": "8000",
+    "host": "localhost"
+  },
+  "directories": {
+    "doc": "./docs",
+    "test": "./test"
+  },
+  "files": [
+    "server.js",
+    "start-debug.js",
+    "customer/",
+    "restaurant/",
+    "*.html",
+    "*.css",
+    "*.js",
+    "manifest.json",
+    "README.md",
+    "REALTIME-TESTING.md"
+  ],
+  "funding": {
+    "type": "individual",
+    "url": "https://github.com/sponsors/zaika-junction"
+  },
+  "private": false,
+  "workspaces": [],
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead",
+    "not ie 11"
+  ],
+  "babel": {},
+  "eslintConfig": {},
+  "prettier": {},
+  "jest": {},
+  "husky": {},
+  "lint-staged": {},
+  "nodemonConfig": {
+    "watch": [
+      "server.js",
+      "start-debug.js"
+    ],
+    "ext": "js,json",
+    "ignore": [
+      "node_modules/",
+      "customer/",
+      "restaurant/",
+      "*.html"
+    ],
+    "delay": 1000,
+    "env": {
+      "NODE_ENV": "development"
+    }
+  },
+  "metadata": {
+    "features": [
+      "Real-time order updates",
+      "Socket.IO integration", 
+      "PWA support",
+      "Offline functionality",
+      "Customer mobile app",
+      "Restaurant dashboard",
+      "Order management",
+      "Menu management",
+      "Payment integration",
+      "Delivery tracking"
+    ],
+    "tech-stack": [
+      "Node.js",
+      "Express.js", 
+      "Socket.IO",
+      "HTML5",
+      "CSS3",
+      "JavaScript ES6+",
+      "PWA",
+      "Service Workers"
+    ],
+    "deployment": {
+      "platforms": ["Render", "Heroku", "Vercel", "Railway"],
+      "requirements": ["Node.js 16+", "NPM 8+"],
+      "environment-variables": ["PORT", "NODE_ENV"]
+    },
+    "testing": {
+      "real-time": "npm run test-realtime",
+      "debug-console": "/debug-realtime.html",
+      "test-console": "/test-realtime.html",
+      "health-check": "/health"
+    }
   }
 }
