@@ -10,8 +10,8 @@ const server = http.createServer(app);
 // Enhanced Socket.IO configuration
 const io = socketIo(server, {
     cors: {
-        origin: process.env.NODE_ENV === 'production' 
-            ? ["https://zaika-mhby.onrender.com"] 
+        origin: process.env.NODE_ENV === 'production'
+            ? ["https://zaika-mhby.onrender.com"]
             : "*",
         methods: ["GET", "POST", "PUT", "DELETE"],
         credentials: true
@@ -21,13 +21,13 @@ const io = socketIo(server, {
     pingInterval: 25000
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Security and Performance Middleware
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production' 
-        ? ["https://zaika-mhby.onrender.com"] 
+    origin: process.env.NODE_ENV === 'production'
+        ? ["https://zaika-mhby.onrender.com"]
         : "*",
     credentials: true
 }));
@@ -48,14 +48,11 @@ app.use((req, res, next) => {
     next();
 });
 
-// Static file serving with caching
-app.use(express.static('customer', {
+// Static file serving with caching - serve all files from root
+app.use(express.static('.', {
     maxAge: NODE_ENV === 'production' ? '1d' : '0',
-    etag: true
-}));
-app.use('/restaurant', express.static('restaurant', {
-    maxAge: NODE_ENV === 'production' ? '1d' : '0',
-    etag: true
+    etag: true,
+    index: false // Don't serve index.html automatically
 }));
 
 // Request logging
@@ -152,19 +149,19 @@ const initializeData = () => {
 // Utility functions
 const validateOrderData = (orderData) => {
     const errors = [];
-    
+
     if (!orderData.items || !Array.isArray(orderData.items) || orderData.items.length === 0) {
         errors.push('Items are required and must be a non-empty array');
     }
-    
+
     if (typeof orderData.total !== 'number' || orderData.total <= 0) {
         errors.push('Total must be a positive number');
     }
-    
+
     if (!orderData.customerInfo || !orderData.customerInfo.name) {
         errors.push('Customer name is required');
     }
-    
+
     orderData.items?.forEach((item, index) => {
         if (!item.name || typeof item.name !== 'string') {
             errors.push(`Item ${index + 1}: name is required`);
@@ -176,26 +173,26 @@ const validateOrderData = (orderData) => {
             errors.push(`Item ${index + 1}: quantity must be a positive number`);
         }
     });
-    
+
     return errors;
 };
 
 const sanitizeString = (str) => {
     if (typeof str !== 'string') return str;
     return str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-              .replace(/[<>]/g, '')
-              .trim();
+        .replace(/[<>]/g, '')
+        .trim();
 };
 
 const calculateEstimatedTime = (items) => {
     if (!items || !Array.isArray(items)) return 30;
-    
+
     const baseTime = 15; // Base preparation time
     const itemTime = items.reduce((total, item) => {
         const menuItem = menuItems.find(mi => mi.id === item.id);
         return total + ((menuItem?.preparationTime || 10) * item.quantity);
     }, 0);
-    
+
     return Math.min(Math.max(baseTime + Math.ceil(itemTime / 2), 15), 60);
 };
 
@@ -216,16 +213,16 @@ app.get('/health', (req, res) => {
 
 // Serve Customer App
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'customer', 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.get('/customer', (req, res) => {
-    res.sendFile(path.join(__dirname, 'customer', 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Serve Restaurant App
 app.get('/restaurant', (req, res) => {
-    res.sendFile(path.join(__dirname, 'restaurant', 'index.html'));
+    res.sendFile(path.join(__dirname, 'index2.html'));
 });
 
 // API Routes
@@ -256,12 +253,12 @@ app.post('/api/menu', (req, res) => {
             createdAt: new Date().toISOString()
         };
         menuItems.push(newItem);
-        
+
         // Notify all connected clients about menu update
         io.emit('menuUpdated', menuItems);
-        
+
         console.log(`✅ New menu item added: ${newItem.name}`);
-        
+
         res.status(201).json({
             success: true,
             message: 'Menu item added successfully',
@@ -280,19 +277,19 @@ app.put('/api/menu/:id', (req, res) => {
     try {
         const itemId = parseInt(req.params.id);
         const itemIndex = menuItems.findIndex(item => item.id === itemId);
-        
+
         if (itemIndex !== -1) {
-            menuItems[itemIndex] = { 
-                ...menuItems[itemIndex], 
+            menuItems[itemIndex] = {
+                ...menuItems[itemIndex],
                 ...req.body,
                 updatedAt: new Date().toISOString()
             };
-            
+
             // Notify all connected clients about menu update
             io.emit('menuUpdated', menuItems);
-            
+
             console.log(`✅ Menu item updated: ${menuItems[itemIndex].name}`);
-            
+
             res.json({
                 success: true,
                 message: 'Menu item updated successfully',
@@ -317,15 +314,15 @@ app.delete('/api/menu/:id', (req, res) => {
     try {
         const itemId = parseInt(req.params.id);
         const itemIndex = menuItems.findIndex(item => item.id === itemId);
-        
+
         if (itemIndex !== -1) {
             const deletedItem = menuItems.splice(itemIndex, 1)[0];
-            
+
             // Notify all connected clients about menu update
             io.emit('menuUpdated', menuItems);
-            
+
             console.log(`✅ Menu item deleted: ${deletedItem.name}`);
-            
+
             res.json({
                 success: true,
                 message: 'Menu item deleted successfully'
@@ -373,7 +370,7 @@ app.post('/api/orders', (req, res) => {
                 errors: validationErrors
             });
         }
-        
+
         // Sanitize customer info
         const sanitizedCustomerInfo = {
             ...req.body.customerInfo,
@@ -384,7 +381,7 @@ app.post('/api/orders', (req, res) => {
                 fullAddress: sanitizeString(req.body.customerInfo.address.fullAddress)
             } : null
         };
-        
+
         // Create new order with enhanced data
         const newOrder = {
             id: `ORD${Date.now()}`,
@@ -401,27 +398,45 @@ app.post('/api/orders', (req, res) => {
             estimatedTime: calculateEstimatedTime(req.body.items),
             orderNumber: orders.length + 1
         };
-        
+
         orders.unshift(newOrder);
-        
+
+        // Get connected users count for debugging
+        const restaurantUsers = Array.from(connectedUsers.values()).filter(u => u.userType === 'restaurant');
+        const customerUsers = Array.from(connectedUsers.values()).filter(u => u.userType === 'customer');
+
+        console.log(`📡 Connected users - Restaurants: ${restaurantUsers.length}, Customers: ${customerUsers.length}`);
+
         // Notify restaurant about new order
-        io.to('restaurant_room').emit('newOrder', newOrder);
-        
-        // Send confirmation to customer
-        io.to('customer_room').emit('orderConfirmed', {
+        console.log('📡 Broadcasting new order to restaurant_room');
+        const restaurantEmitResult = io.to('restaurant_room').emit('newOrder', newOrder);
+        console.log('📡 Restaurant emit result:', restaurantEmitResult);
+
+        // Send confirmation to customer who placed the order
+        console.log('📡 Broadcasting order confirmation to customer_room');
+        const customerEmitResult = io.to('customer_room').emit('orderConfirmed', {
             orderId: newOrder.id,
             estimatedTime: newOrder.estimatedTime,
             orderNumber: newOrder.orderNumber
         });
-        
+        console.log('📡 Customer emit result:', customerEmitResult);
+
+        // Also emit to all connected clients for debugging
+        io.emit('orderCreated', {
+            orderId: newOrder.id,
+            status: 'created',
+            timestamp: new Date().toISOString(),
+            connectedUsers: connectedUsers.size
+        });
+
         console.log(`✅ New order created: ${newOrder.id} - ₹${newOrder.total}`);
-        
+
         res.status(201).json({
             success: true,
             message: 'Order placed successfully',
             data: newOrder
         });
-        
+
     } catch (error) {
         console.error('❌ Error creating order:', error);
         res.status(500).json({
@@ -436,7 +451,7 @@ app.put('/api/orders/:id/status', (req, res) => {
     try {
         const orderId = req.params.id;
         const { status } = req.body;
-        
+
         // Validate status
         const validStatuses = ['pending', 'preparing', 'ready', 'delivered', 'cancelled'];
         if (!validStatuses.includes(status)) {
@@ -445,22 +460,32 @@ app.put('/api/orders/:id/status', (req, res) => {
                 message: 'Invalid status'
             });
         }
-        
+
         const orderIndex = orders.findIndex(order => order.id === orderId);
-        
+
         if (orderIndex !== -1) {
             orders[orderIndex].status = status;
             orders[orderIndex].updatedAt = new Date().toISOString();
-            
+
             // Notify customer about status update
-            io.to('customer_room').emit('orderStatusUpdate', {
+            console.log(`📡 Broadcasting status update for order ${orderId} to customer_room`);
+            const statusUpdateResult = io.to('customer_room').emit('orderStatusUpdate', {
                 orderId: orderId,
                 status: status,
                 order: orders[orderIndex]
             });
-            
+            console.log('📡 Status update emit result:', statusUpdateResult);
+
+            // Also emit to all connected clients for debugging
+            io.emit('orderStatusChanged', {
+                orderId: orderId,
+                status: status,
+                timestamp: new Date().toISOString(),
+                connectedUsers: connectedUsers.size
+            });
+
             console.log(`✅ Order ${orderId} status updated to: ${status}`);
-            
+
             res.json({
                 success: true,
                 message: 'Order status updated successfully',
@@ -485,10 +510,10 @@ app.put('/api/orders/:id/status', (req, res) => {
 app.get('/api/restaurant/stats', (req, res) => {
     try {
         const today = new Date().toDateString();
-        const todayOrders = orders.filter(order => 
+        const todayOrders = orders.filter(order =>
             new Date(order.createdAt).toDateString() === today
         );
-        
+
         const stats = {
             totalOrders: orders.length,
             todayOrders: todayOrders.length,
@@ -502,7 +527,7 @@ app.get('/api/restaurant/stats', (req, res) => {
                 total: connectedUsers.size
             }
         };
-        
+
         res.json({
             success: true,
             data: stats
@@ -519,40 +544,61 @@ app.get('/api/restaurant/stats', (req, res) => {
 // Enhanced Socket.IO connection handling
 io.on('connection', (socket) => {
     console.log(`🔌 User connected: ${socket.id}`);
-    
+
     // Join room based on user type
     socket.on('joinRoom', (data) => {
         try {
+            console.log(`🔌 Join room request from ${socket.id}:`, data);
+
+            if (!data || !data.userType) {
+                throw new Error('Invalid join room data - userType required');
+            }
+
             const { userType, userId } = data;
             const roomName = `${userType}_room`;
-            
+
+            // Leave any existing rooms first
+            const existingUser = connectedUsers.get(socket.id);
+            if (existingUser && existingUser.roomName) {
+                socket.leave(existingUser.roomName);
+                console.log(`👤 ${socket.id} left previous room: ${existingUser.roomName}`);
+            }
+
+            // Join new room
             socket.join(roomName);
-            connectedUsers.set(socket.id, { userType, userId, roomName });
-            
+            connectedUsers.set(socket.id, { userType, userId, roomName, joinedAt: new Date().toISOString() });
+
             console.log(`👤 ${userType} joined room: ${roomName} (${socket.id})`);
-            
+            console.log(`📊 Room ${roomName} now has ${io.sockets.adapter.rooms.get(roomName)?.size || 0} members`);
+
             // Send welcome message
             socket.emit('connected', {
                 message: `Welcome to Zaika Junction ${userType} app!`,
                 socketId: socket.id,
+                roomName: roomName,
                 timestamp: new Date().toISOString()
             });
-            
+
             // Update connection stats
             const stats = {
                 customers: Array.from(connectedUsers.values()).filter(u => u.userType === 'customer').length,
                 restaurants: Array.from(connectedUsers.values()).filter(u => u.userType === 'restaurant').length,
-                total: connectedUsers.size
+                total: connectedUsers.size,
+                rooms: {
+                    customer_room: io.sockets.adapter.rooms.get('customer_room')?.size || 0,
+                    restaurant_room: io.sockets.adapter.rooms.get('restaurant_room')?.size || 0
+                }
             };
-            
+
+            console.log('📊 Connection stats:', stats);
             io.emit('connectionStats', stats);
-            
+
         } catch (error) {
             console.error('❌ Error joining room:', error);
-            socket.emit('error', { message: 'Failed to join room' });
+            socket.emit('error', { message: 'Failed to join room: ' + error.message });
         }
     });
-    
+
     // Handle order tracking
     socket.on('trackOrder', (orderId) => {
         try {
@@ -572,19 +618,19 @@ io.on('connection', (socket) => {
             socket.emit('error', { message: 'Failed to track order' });
         }
     });
-    
+
     // Handle menu item availability toggle
     socket.on('toggleItemAvailability', (data) => {
         try {
             const { itemId, available } = data;
             const itemIndex = menuItems.findIndex(item => item.id === itemId);
-            
+
             if (itemIndex !== -1) {
                 menuItems[itemIndex].available = available;
-                
+
                 // Notify all clients about menu update
                 io.emit('menuUpdated', menuItems);
-                
+
                 console.log(`🍽️ Menu item ${itemId} availability: ${available}`);
             }
         } catch (error) {
@@ -592,37 +638,49 @@ io.on('connection', (socket) => {
             socket.emit('error', { message: 'Failed to update menu item' });
         }
     });
-    
+
     // Handle test events
     socket.on('test', (data) => {
         console.log('🧪 Test event received:', data);
-        socket.emit('testResponse', { 
-            message: 'Test successful', 
+        socket.emit('testResponse', {
+            message: 'Test successful',
             timestamp: new Date().toISOString(),
-            originalData: data 
+            originalData: data
         });
     });
-    
+
     // Handle disconnection
     socket.on('disconnect', (reason) => {
         const user = connectedUsers.get(socket.id);
         if (user) {
             console.log(`🔌 ${user.userType} disconnected: ${socket.id} (${reason})`);
+
+            // Leave room
+            if (user.roomName) {
+                socket.leave(user.roomName);
+                console.log(`👤 ${socket.id} left room: ${user.roomName}`);
+            }
+
             connectedUsers.delete(socket.id);
-            
+
             // Update connection stats
             const stats = {
                 customers: Array.from(connectedUsers.values()).filter(u => u.userType === 'customer').length,
                 restaurants: Array.from(connectedUsers.values()).filter(u => u.userType === 'restaurant').length,
-                total: connectedUsers.size
+                total: connectedUsers.size,
+                rooms: {
+                    customer_room: io.sockets.adapter.rooms.get('customer_room')?.size || 0,
+                    restaurant_room: io.sockets.adapter.rooms.get('restaurant_room')?.size || 0
+                }
             };
-            
+
+            console.log('📊 Updated connection stats after disconnect:', stats);
             io.emit('connectionStats', stats);
         } else {
             console.log(`🔌 Unknown user disconnected: ${socket.id} (${reason})`);
         }
     });
-    
+
     // Handle connection errors
     socket.on('error', (error) => {
         console.error('❌ Socket error:', error);
@@ -666,14 +724,18 @@ process.on('SIGINT', () => {
 
 // Start server
 server.listen(PORT, () => {
-    console.log(`🚀 Zaika Junction Server running on port ${PORT}`);
+    console.log(`\n🚀 Zaika Junction Server running on port ${PORT}`);
     console.log(`📱 Customer App: http://localhost:${PORT}/`);
     console.log(`🏪 Restaurant App: http://localhost:${PORT}/restaurant`);
     console.log(`📊 API Endpoints: http://localhost:${PORT}/api/`);
     console.log(`🔗 Socket.IO: http://localhost:${PORT}/socket.io/`);
     console.log(`🏥 Health Check: http://localhost:${PORT}/health`);
+    console.log(`🔍 Debug Console: http://localhost:${PORT}/debug-realtime.html`);
+    console.log(`🧪 Test Console: http://localhost:${PORT}/test-realtime.html`);
     console.log(`🌍 Environment: ${NODE_ENV}`);
-    console.log(`\n✅ Server ready for connections!`);
+    console.log(`\n✅ Server ready for real-time connections!`);
+    console.log(`📡 Socket.IO rooms will be: customer_room, restaurant_room`);
+    console.log(`🔧 Real-time features: Order updates, Menu changes, Status notifications\n`);
 });
 
 module.exports = { app, server, io };
