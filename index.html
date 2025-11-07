@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZaikaJunction - Authentic Indian Delights</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="cart-styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+Bhai+2:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        // Dynamic API URL detection
+        const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:8000'
+            : 'https://zaika-mhby.onrender.com';
+        // Make API_BASE_URL globally available
+        window.API_BASE_URL = API_BASE_URL;
+        // Load Socket.IO client dynamically
+        const socketScript = document.createElement('script');
+        socketScript.src = `${API_BASE_URL}/socket.io/socket.io.js`;
+        document.head.appendChild(socketScript);
+    </script>
+    <link rel="stylesheet" href="styles.css">
+    <meta name="theme-color" content="#FF6B35">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <i class="fas fa-utensils"></i>
+                <span>Zaika Junction</span>
+            </div>
+            <div class="header-actions">
+                <button class="install-app-btn" id="installAppBtn" onclick="installApp()">
+                    <i class="fas fa-mobile-alt"></i>
+                    <span class="install-text">Install App</span>
+                </button>
+                <button class="notification-btn" onclick="showNotifications()">
+                    <i class="fas fa-bell"></i>
+                    <span class="notification-badge">3</span>
+                </button>
+                <button class="cart-btn" onclick="toggleCart()">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span class="cart-count">0</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Home Section -->
+        <section id="home" class="section active">
+            <div class="hero-banner">
+                <div class="hero-content">
+                    <h1>Welcome to Zaika Junction</h1>
+                    <p>Authentic Indian sweets, namkeen & street food delivered fresh to your doorstep</p>
+                    <div class="hero-stats">
+                        <div class="stat">
+                            <i class="fas fa-star"></i>
+                            <span>4.8 Rating</span>
+                        </div>
+                        <div class="stat">
+                            <i class="fas fa-clock"></i>
+                            <span>30 min delivery</span>
+                        </div>
+                        <div class="stat">
+                            <i class="fas fa-leaf"></i>
+                            <span>Fresh & Pure</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Categories -->
+            <div class="quick-categories">
+                <h2>What are you craving today?</h2>
+                <div class="category-grid">
+                    <div class="category-card" onclick="showMenu('sweets')">
+                        <div class="category-icon">🍯</div>
+                        <h3>Sweets</h3>
+                        <p>Gulab Jamun, Rasgulla, Kaju Katli</p>
+                    </div>
+                    <div class="category-card" onclick="showMenu('namkeen')">
+                        <div class="category-icon">🥨</div>
+                        <h3>Namkeen</h3>
+                        <p>Bhujia, Mixture, Chivda</p>
+                    </div>
+                    <div class="category-card" onclick="showMenu('snacks')">
+                        <div class="category-icon">🥟</div>
+                        <h3>Snacks</h3>
+                        <p>Samosa, Kachori, Pakora</p>
+                    </div>
+                    <div class="category-card" onclick="showMenu('combos')">
+                        <div class="category-icon">🎁</div>
+                        <h3>Special Combos</h3>
+                        <p>Festival boxes, Family packs</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Special Offers -->
+            <div class="offers-section">
+                <h2>🎉 Special Offers</h2>
+                <div class="offers-carousel">
+                    <div class="offer-card">
+                        <div class="offer-badge">50% OFF</div>
+                        <h3>Festival Special</h3>
+                        <p>Get 50% off on all sweet boxes above ₹500</p>
+                        <button class="offer-btn">Claim Now</button>
+                    </div>
+                    <div class="offer-card">
+                        <div class="offer-badge">FREE DELIVERY</div>
+                        <h3>Free Delivery</h3>
+                        <p>Free delivery on orders above ₹300</p>
+                        <button class="offer-btn">Order Now</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Menu Section -->
+        <section id="menu" class="section">
+            <div class="menu-header">
+                <h1>Our Menu</h1>
+                <div class="menu-filters">
+                    <button class="filter-btn active" data-category="all">All</button>
+                    <button class="filter-btn" data-category="sweets">Sweets</button>
+                    <button class="filter-btn" data-category="namkeen">Namkeen</button>
+                    <button class="filter-btn" data-category="snacks">Snacks</button>
+                    <button class="filter-btn" data-category="combos">Combos</button>
+                </div>
+            </div>
+            <div class="menu-items" id="menuItems">
+                <!-- Menu items will be populated by JavaScript -->
+            </div>
+        </section>
+
+        <!-- Cart Section -->
+        <section id="cart" class="section">
+            <div class="cart-header">
+                <h1>Your Cart</h1>
+                <button class="clear-cart-btn" onclick="clearCart()">Clear All</button>
+            </div>
+            <div class="cart-items" id="cartItems">
+                <!-- Cart items will be populated by JavaScript -->
+            </div>
+            <div class="cart-summary">
+                <div class="summary-row">
+                    <span>Subtotal:</span>
+                    <span id="subtotal">₹0</span>
+                </div>
+                <div class="summary-row">
+                    <span>Delivery:</span>
+                    <span id="delivery">₹40</span>
+                </div>
+                <div class="summary-row total">
+                    <span>Total:</span>
+                    <span id="total">₹40</span>
+                </div>
+                <button class="checkout-btn" onclick="proceedToCheckout()">Proceed to Checkout</button>
+            </div>
+        </section>
+
+        <!-- Orders Section -->
+        <section id="orders" class="section">
+            <div class="orders-header">
+                <h1>Your Orders</h1>
+                <div class="order-filters">
+                    <button class="filter-btn active">Active</button>
+                    <button class="filter-btn">Past Orders</button>
+                </div>
+            </div>
+            <div class="orders-list">
+                <div class="order-card">
+                    <div class="order-status preparing">
+                        <i class="fas fa-clock"></i>
+                        <span>Preparing</span>
+                    </div>
+                    <div class="order-details">
+                        <h3>Order #ZJ001234</h3>
+                        <p>2x Gulab Jamun, 1x Samosa</p>
+                        <div class="order-meta">
+                            <span class="order-time">Ordered 15 min ago</span>
+                            <span class="order-total">₹180</span>
+                        </div>
+                    </div>
+                    <button class="track-btn" onclick="trackOrder('ZJ001234')">Track Order</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Profile Section -->
+        <section id="profile" class="section">
+            <div class="profile-header">
+                <div class="profile-avatar">
+                    <i class="fas fa-user"></i>
+                </div>
+                <h2>Welcome, Food Lover!</h2>
+                <p>Loyalty Points: <span class="points">250</span></p>
+            </div>
+            <div class="profile-menu">
+                <div class="profile-item" onclick="showAddresses()">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <span>Delivery Addresses</span>
+                    <i class="fas fa-chevron-right"></i>
+                </div>
+                <div class="profile-item" onclick="showPaymentMethods()">
+                    <i class="fas fa-credit-card"></i>
+                    <span>Payment Methods</span>
+                    <i class="fas fa-chevron-right"></i>
+                </div>
+                <div class="profile-item" onclick="showOffers()">
+                    <i class="fas fa-gift"></i>
+                    <span>Offers & Coupons</span>
+                    <i class="fas fa-chevron-right"></i>
+                </div>
+                <div class="profile-item" onclick="showSupport()">
+                    <i class="fas fa-headset"></i>
+                    <span>Help & Support</span>
+                    <i class="fas fa-chevron-right"></i>
+                </div>
+                <div class="profile-item" onclick="showFeedback()">
+                    <i class="fas fa-star"></i>
+                    <span>Rate & Review</span>
+                    <i class="fas fa-chevron-right"></i>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" data-section="home">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </button>
+        <button class="nav-item" data-section="menu">
+            <i class="fas fa-utensils"></i>
+            <span>Menu</span>
+        </button>
+        <button class="nav-item" data-section="cart">
+            <i class="fas fa-shopping-cart"></i>
+            <span>Cart</span>
+        </button>
+        <button class="nav-item" data-section="orders">
+            <i class="fas fa-receipt"></i>
+            <span>Orders</span>
+        </button>
+        <button class="nav-item" data-section="profile">
+            <i class="fas fa-user"></i>
+            <span>Profile</span>
+        </button>
+    </nav>
+
+    <!-- Modals and Overlays -->
+    <div id="itemModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+
+    <div id="cartOverlay" class="overlay">
+        <div class="overlay-content">
+            <div class="overlay-header">
+                <h3>Cart</h3>
+                <button onclick="toggleCart()">&times;</button>
+            </div>
+            <div id="overlayCartItems"></div>
+        </div>
+    </div>
+
+    <!-- PWA Install Banner -->
+    <div id="installBanner" class="install-banner hidden">
+        <div class="install-content">
+            <div class="install-icon">📱</div>
+            <div class="install-text">
+                <h3>Install Zaika Junction App</h3>
+                <p>Get the full app experience with offline access</p>
+            </div>
+            <div class="install-actions">
+                <button id="installBtn" class="install-btn">Install</button>
+                <button id="dismissBtn" class="dismiss-btn">×</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js?v=5"></script>
+    
+    <!-- PWA Service Worker Registration -->
+    <script>
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('SW registered: ', registration);
+                        
+                        // Check for updates
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // New content is available, show update notification
+                                    showUpdateNotification();
+                                }
+                            });
+                        });
+                    })
+                    .catch(registrationError => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+
+        // PWA Install Prompt
+        let deferredPrompt;
+        const installBanner = document.getElementById('installBanner');
+        const installBtn = document.getElementById('installBtn');
+        const dismissBtn = document.getElementById('dismissBtn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            console.log('PWA install prompt triggered');
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Show custom install banner immediately for testing
+            setTimeout(() => {
+                installBanner.classList.remove('hidden');
+                installBanner.classList.add('show');
+                console.log('Install banner shown');
+            }, 1000); // Show after 1 second instead of 3
+        });
+
+        // Initialize app on load
+        window.addEventListener('load', () => {
+            // Check if app is already installed
+            if (isPWAInstalled()) {
+                hideInstallButton();
+                console.log('PWA is already installed');
+            } else {
+                // Show install options for non-installed users
+                setTimeout(() => {
+                    if (!sessionStorage.getItem('installBannerDismissed')) {
+                        installBanner.classList.remove('hidden');
+                        installBanner.classList.add('show');
+                        console.log('Install banner shown');
+                    }
+                }, 2000);
+            }
+        });
+
+        // Hide install elements when app is installed
+        window.addEventListener('appinstalled', (evt) => {
+            console.log('PWA was installed');
+            hideInstallButton();
+            hideInstallBanner();
+            showNotification('Welcome to Zaika Junction App! 🍯', 'success');
+        });
+
+        // Universal Install Function - Works on all devices
+        function installApp() {
+            console.log('Install App clicked');
+            
+            // Check if already installed
+            if (isPWAInstalled()) {
+                showNotification('App is already installed! 🎉', 'success');
+                return;
+            }
+            
+            // Try native install prompt first
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('User accepted the install prompt');
+                        showNotification('App installing... 📱', 'success');
+                        hideInstallButton();
+                    } else {
+                        console.log('User dismissed the install prompt');
+                        showManualInstallInstructions();
+                    }
+                    deferredPrompt = null;
+                });
+            } else {
+                // Show manual instructions for all browsers
+                showManualInstallInstructions();
+            }
+        }
+
+        // Hide install button after successful install
+        function hideInstallButton() {
+            const installBtn = document.getElementById('installAppBtn');
+            if (installBtn) {
+                installBtn.style.display = 'none';
+            }
+        }
+
+        // Hide install banner
+        function hideInstallBanner() {
+            const banner = document.getElementById('installBanner');
+            if (banner) {
+                banner.classList.remove('show');
+                banner.classList.add('hidden');
+            }
+        }
+
+        // Check if PWA is already installed
+        function isPWAInstalled() {
+            return window.matchMedia('(display-mode: standalone)').matches || 
+                   window.navigator.standalone === true;
+        }
+
+        // Legacy function for compatibility
+        function showInstallPrompt() {
+            installApp();
+        }
+
+        function showManualInstallInstructions() {
+            // Detect browser and show specific instructions
+            const isAndroid = /Android/i.test(navigator.userAgent);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isChrome = /Chrome/i.test(navigator.userAgent);
+            const isSafari = /Safari/i.test(navigator.userAgent) && !isChrome;
+            
+            let instructions = `
+                <div style="text-align: left; line-height: 1.6; padding: 1rem;">
+                    <h3 style="color: var(--primary-saffron); margin-bottom: 1rem;">📱 App Install करें:</h3>
+            `;
+            
+            if (isAndroid && isChrome) {
+                instructions += `
+                    <div style="background: #E8F5E8; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                        <p><strong>🤖 Android Chrome में:</strong></p>
+                        <p>1. Menu button (⋮) दबाएं (top-right में)</p>
+                        <p>2. "Add to Home screen" या "Install app" देखें</p>
+                        <p>3. "Add" या "Install" दबाएं</p>
+                        <p>4. Home screen पर app icon मिल जाएगा!</p>
+                    </div>
+                `;
+            } else if (isIOS && isSafari) {
+                instructions += `
+                    <div style="background: #E8F5E8; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                        <p><strong>🍎 iPhone Safari में:</strong></p>
+                        <p>1. Share button (□↗) दबाएं (bottom में)</p>
+                        <p>2. "Add to Home Screen" select करें</p>
+                        <p>3. "Add" दबाएं</p>
+                        <p>4. Home screen पर app icon मिल जाएगा!</p>
+                    </div>
+                `;
+            } else {
+                instructions += `
+                    <div style="background: #FFF3E0; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                        <p><strong>💻 Desktop Browser में:</strong></p>
+                        <p>• Address bar में install icon (⊕) देखें</p>
+                        <p>• या Browser menu में "Install" option</p>
+                    </div>
+                    <div style="background: #E3F2FD; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                        <p><strong>📱 Mobile Browser में:</strong></p>
+                        <p>• Menu (⋮) → "Add to Home screen"</p>
+                        <p>• या "Install app" option देखें</p>
+                    </div>
+                `;
+            }
+            
+            instructions += `
+                    <div style="background: #FFF8E1; padding: 1rem; border-radius: 8px; border-left: 4px solid #FF6B35;">
+                        <p><strong>💡 Tip:</strong> Install करने के बाद app native app की तरह काम करेगा:</p>
+                        <p>• Offline access ✅</p>
+                        <p>• Fast loading ✅</p>
+                        <p>• Push notifications ✅</p>
+                        <p>• Full screen experience ✅</p>
+                    </div>
+                </div>
+            `;
+            
+            const modal = document.getElementById('itemModal');
+            const modalContent = document.getElementById('modalContent');
+            modalContent.innerHTML = instructions;
+            modal.style.display = 'block';
+        }
+
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`User response to install prompt: ${outcome}`);
+                
+                if (outcome === 'accepted') {
+                    console.log('User accepted the install prompt');
+                    showInstallSuccess();
+                }
+                
+                deferredPrompt = null;
+                hideInstallBanner();
+            }
+        });
+
+        dismissBtn.addEventListener('click', () => {
+            hideInstallBanner();
+            // Don't show again for this session
+            sessionStorage.setItem('installBannerDismissed', 'true');
+        });
+
+        function hideInstallBanner() {
+            installBanner.classList.remove('show');
+            installBanner.classList.add('hidden');
+        }
+
+        function showInstallSuccess() {
+            showNotification('App installed successfully! 🎉', 'success');
+        }
+
+        function showUpdateNotification() {
+            showNotification('New version available! Refresh to update.', 'info');
+        }
+
+        // Check if app is installed
+        window.addEventListener('appinstalled', (evt) => {
+            console.log('PWA was installed');
+            showNotification('Welcome to Zaika Junction App! 🍯', 'success');
+        });
+
+        // Handle app shortcuts
+        if (window.location.search.includes('section=')) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const section = urlParams.get('section');
+            if (section) {
+                // Wait for DOM to load then navigate to section
+                document.addEventListener('DOMContentLoaded', () => {
+                    setTimeout(() => {
+                        showSection(section);
+                    }, 500);
+                });
+            }
+        }
+
+        // Request notification permission
+        if ('Notification' in window && navigator.serviceWorker) {
+            if (Notification.permission === 'default') {
+                setTimeout(() => {
+                    Notification.requestPermission().then(permission => {
+                        console.log('Notification permission:', permission);
+                    });
+                }, 5000); // Ask after 5 seconds
+            }
+        }
+
+        // Handle online/offline status
+        window.addEventListener('online', () => {
+            showNotification('You are back online! 🌐', 'success');
+            document.body.classList.remove('offline');
+        });
+
+        window.addEventListener('offline', () => {
+            showNotification('You are offline. Some features may be limited. 📱', 'warning');
+            document.body.classList.add('offline');
+        });
+
+        // Background sync for orders when back online
+        if ('serviceWorker' in navigator && 'sync' in window.ServiceWorkerRegistration.prototype) {
+            window.addEventListener('online', () => {
+                navigator.serviceWorker.ready.then(registration => {
+                    return registration.sync.register('background-sync-orders');
+                });
+            });
+        }
+    </script>
+</body>
+</html>
